@@ -64,10 +64,90 @@ you will likely land on a larger bin width, e.g. 30–60 s).
 ## Note for real BGL
 
 When you point the survey at a downloaded `BGL.log`, expect:
-- a larger template count (~320 in Loghub-2.0 labeling),
+- a larger template count (~320 in Loghub-2.0 labeling; default Drain
+  granularity over-decomposes to far more — see below),
 - slower dominant tones (node heartbeats / periodic RAS messages),
 - therefore a **larger** suggested bin width.
 
 If real BGL comes back *flatter than expected* (few low-flatness templates), you
 learn that on day one — before building anything else on top — which is the whole
 point of running this first.
+
+---
+
+## Real BGL findings (run on the full 4.74M-line BGL, 2026-06-27)
+
+Reproduce: `logsig survey --bgl data/BGL.log --bin-widths 30 60 120`.
+
+**This is the experiment the whole spectral thesis stands or falls on, and the
+result is sobering. Recording it honestly.**
+
+| bin width | templates | "periodic" (flatness < 0.4) | share of templates ≥ 0.9 flatness |
+|-----------|-----------|------------------------------|------------------------------------|
+| 30 s      | 1776      | 7                            | 1598 / 1776 ≈ **90%**              |
+| 60 s      | 1776      | 7                            | 1605 / 1776 ≈ **90%**              |
+| 120 s     | 1776      | 5                            | 1593 / 1776 ≈ **90%**              |
+
+Two things stand out:
+
+### 1. BGL is overwhelmingly flat
+
+~90% of templates sit in the top flatness decile (white-noise / sparse). Only
+**5–7 of 1776** templates clear the periodicity bar at any bin width. The naive
+gate prints `HEALTHY ✓` (it only requires ≥1 candidate), but that verdict is
+**too generous** — see below. The honest read is: BGL does **not** contain a
+healthy population of clean periodic *operational* tones.
+
+### 2. The few "periodic" candidates are drift artifacts, not cadences
+
+The reported dominant **period of every candidate equals the Welch segment
+length** (or its second bin):
+
+```
+bin=30s : candidates at 7680s (=30×256, lowest bin) and 3840s (2nd bin)
+bin=60s : candidates at 15360s (=60×256) and 7680s
+bin=120s: candidates at 30720s (=120×256) and 15360s
+```
+
+A genuine jittered cadence (a 30 s health check) would put its peak at a
+period **independent of the analysis window**. A peak pinned to the lowest
+resolvable frequency means the energy is **slow drift / a trend over the
+214-day run** (the job mix and load changing across months), *not* a periodic
+tone. The candidate templates confirm it by content — `instruction cache parity
+error corrected`, `double-hummer alignment exceptions`, `MACHINE CHECK PLB write
+IRQ`, `generating core.304` — these are bursty RAS/error messages whose slow
+envelope is being read as "low flatness", not heartbeats or polling loops.
+
+This is exactly the non-stationarity §4.1 warns about, and it surfaces the
+brittleness of single-bin `argmax` dominant-frequency picking (see
+`docs/DESIGN.md` and the fuzzy-matching discussion): the detector would currently
+mark these drift templates **eligible** and could fire spurious `freq_shift` /
+`silence` on them — false positives born of a trend, not a broken rhythm.
+
+### Implications (honest)
+
+- **For BGL specifically:** it is a *poor exemplar* for this detector. BGL is HPC
+  supercomputer RAS logging; it has bursty error clustering and slow load drift,
+  but few crisp operational cadences. The spec picked it for its long continuous
+  span, which is real — but span ≠ periodicity. The "right problem" texture
+  (health checks, polling, cron, heartbeats) is sparse here.
+- **This does not condemn the thesis globally** — a web-services / microservice
+  corpus (liveness probes, schedulers, cron, retry loops) would plausibly look
+  very different. But it does mean **BGL cannot be the validation that the
+  premise holds in production**; the synthetic harness remains the only place the
+  detector sees clean tones, and that is circular. Validating on a real corpus
+  with genuine cadences is now the top open question.
+- **Detector hardening this motivates** (not yet built):
+  1. **Exclude the DC-adjacent / trend shelf** (lowest 1–2 frequency bins) or
+     detrend more aggressively, so slow drift can't masquerade as a tone.
+  2. **Require a real peak above the low-frequency shelf** — tighten
+     `min_peak_prominence` and add an absolute-period sanity bound
+     (reject "period == segment length").
+  3. **Band-energy matching against the baseline's per-window distribution**
+     instead of single-bin `argmax`, so eligibility reflects a genuine,
+     jitter-tolerant cadence rather than a trend artifact.
+
+Bottom line: **Stage 0 did its job** — it told us on day one, cheaply, that BGL
+is the wrong dataset to prove this detector, and that the current eligibility
+gate is too permissive about low-frequency drift. Better to know now than after
+building an eval on top of it.
