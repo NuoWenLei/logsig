@@ -1,0 +1,7 @@
+numpy>=1.23
+scipy>=1.9
+drain3>=0.9.11
+# optional, only needed for the live LLM urgency filter (stage 6):
+# anthropic>=0.30
+# dev:
+pytest>=7

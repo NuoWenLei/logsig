@@ -1,0 +1,32 @@
+{
+  "bin_width_s": 8.0,
+  "baseline": {
+    "train_start_frac": 0.0,
+    "train_end_frac": 0.35,
+    "welch_nperseg_bins": 256,
+    "welch_overlap_frac": 0.5,
+    "welch_window": "hann",
+    "welch_detrend": "constant"
+  },
+  "eligibility": {
+    "flatness_threshold": 0.4,
+    "min_peak_prominence": 0.1,
+    "min_baseline_mean_count": 0.05
+  },
+  "detect": {
+    "detect_window_bins": 256,
+    "detect_hop_bins": 32,
+    "silence_rate_frac": 0.25,
+    "freq_shift_period_tol": 0.3,
+    "drift_flatness_increase": 0.15,
+    "burst_factor": 4.0,
+    "burst_min_abs_increase": 0.5,
+    "burst_baseline_quiet_max": 0.5
+  },
+  "trivial": {
+    "spike_zscore": 4.0,
+    "spike_min_count": 5,
+    "spike_window_bins": 64
+  },
+  "baseline_strategy": "fixed"
+}

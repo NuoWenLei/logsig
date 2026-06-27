@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.DS_Store
+
+# Datasets are large and not redistributed (Loghub license — see README).
+data/BGL.log
+data/BGL/
+data/*.tar.gz
+data/raw/
+# generated artifacts
+out/
+*.parquet
