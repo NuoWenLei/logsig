@@ -13,4 +13,5 @@ tuples that the templating stage can consume.
 """
 
 from .bgl import parse_bgl_line, iter_bgl, RawLine  # noqa: F401
+from .openstack import parse_openstack_line, iter_openstack  # noqa: F401
 from .synthetic import SyntheticConfig, generate_synthetic_bgl  # noqa: F401

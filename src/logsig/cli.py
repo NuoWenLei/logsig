@@ -28,11 +28,14 @@ def _load_config(path: Optional[str]) -> Config:
 
 def _events_from_args(args, config: Config) -> List[Event]:
     from .ingest.bgl import iter_bgl, parse_bgl_line
+    from .ingest.openstack import iter_openstack
     from .ingest.synthetic import (generate_synthetic_bgl, SyntheticConfig,
                                    default_specs)
     from .template import Templater
 
     templater = Templater()
+    if getattr(args, "openstack", None):
+        return list(templater.template(iter_openstack(args.openstack)))
     if args.bgl:
         return list(templater.template(iter_bgl(args.bgl)))
     cfg = SyntheticConfig(seed=args.seed, duration_s=args.duration,
@@ -133,6 +136,9 @@ def cmd_gen(args) -> int:
 
 def _add_source_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--bgl", help="path to a real BGL.log (else synthetic)")
+    p.add_argument("--openstack",
+                   help="path to an OpenStack log file or directory of "
+                        "openstack_normal*.log (has genuine ~60s cadences)")
     p.add_argument("--seed", type=int, default=1234)
     p.add_argument("--duration", type=float, default=24 * 3600.0,
                    help="synthetic span in seconds")

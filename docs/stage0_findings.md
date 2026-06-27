@@ -151,3 +151,76 @@ Bottom line: **Stage 0 did its job** — it told us on day one, cheaply, that BG
 is the wrong dataset to prove this detector, and that the current eligibility
 gate is too permissive about low-frequency drift. Better to know now than after
 building an eval on top of it.
+
+---
+
+## A better corpus: OpenStack (run 2026-06-27)
+
+After BGL came back flat, we shopped Loghub for a corpus with genuine
+*operational* cadence (health checks / polling / periodic tasks) rather than
+bursty errors. Surveyed candidates:
+
+| corpus | result |
+|--------|--------|
+| **OpenStack** (Loghub, 207k lines) | **healthy cadences — adopted** |
+| HealthApp (253k lines, 10.5d) | flat; its one candidate is a segment-length drift artifact (event-driven, not cadenced) |
+| BGL (4.7M, 214d) | flat (above) |
+
+Reproduce: `logsig survey --openstack data/OpenStack --bin-widths 5 10`.
+
+### OpenStack has real tones
+
+On the continuous 20.8h block (`openstack_normal2.log`), at bin width 5–10 s:
+
+```
+templates: 33   periodic (flatness < 0.4): 22
+flatness distribution: a real cluster in [0.10, 0.30], NOT piled at ~1.0.
+
+  template_id  period_s  flatness   prom    mean   example
+  T4             41.29     0.147   0.49   0.435   nova.virt.libvirt.imagecache ...
+  T11/12/13      60.95     0.20    0.11   0.06    nova.compute.resource_tracker ...
+```
+
+The decisive contrast with BGL: these periods are **stable across bin widths**
+(41 s and 61 s show at 5 s, 10 s, and 30 s bins) — *independent of the analysis
+window* — which is the signature of a genuine cadence, not the segment-length
+artifact. `nova.compute.resource_tracker` at ~60 s is OpenStack's textbook
+periodic task (`update_available_resource`, default 60 s interval) surfacing as a
+clean tone. The right bin width here is ~8–10 s (≈ T/4 of the 40–60 s tones) —
+much finer than BGL would have wanted.
+
+### The detector fires on a real broken cadence
+
+Injecting a **silence** into `nova.compute.resource_tracker` (baseline period
+60.24 s) at 65% of the continuous block, with `bin_width_s = 8`:
+
+```
+FIRED 'silence' on the real 60s cadence after injection;
+latency = 203 bins (~27 min), bounded by the 256-bin detection window.
+```
+
+This is the thesis working on a genuine operational tone, not a synthetic sine.
+
+### Honest caveats from real data (these are the value of running it)
+
+1. **Collection gaps look like synchronized silence.** `openstack_normal1.log`
+   ends 05-16 06:25 and `openstack_normal2.log` resumes 05-16 15:15 — a ~9h hole.
+   Concatenated, *every* template fires `silence` at the same bin. That is the
+   detector being *correct* (everything did stop), and it is exactly the
+   synchronized-cliff pattern `cooccurring_flags` + the LLM filter are meant to
+   triage as "one gap/deploy, not N outages" — never analyze across such a gap
+   without re-baselining. (We use a single continuous block for the clean demo.)
+2. **Real load is non-stationary, so bystanders fire.** In the clean silence
+   demo, ~21 of 24 eligible templates also fired (drift/freq_shift) because the
+   benchmark load has phases — tones legitimately shift. On the synthetic corpus
+   we get **zero** bystanders; on real OpenStack we get many. That delta is the
+   honest measure of the fixed-baseline weakness (§5.1) and the strongest
+   motivation for the v1 rolling-baseline + disagreement matrix and for the
+   detector-hardening items above (trend-shelf exclusion, distribution-based
+   band matching). It is invisible on synthetic data — which is the whole reason
+   to run on a real corpus.
+
+**Net:** OpenStack validates that the spectral premise is real where genuine
+cadences exist, *and* exposes the real-world false-positive pressure (gaps +
+non-stationarity) that the synthetic harness cannot show. It is the right corpus
+to drive v1.

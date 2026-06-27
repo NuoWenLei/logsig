@@ -159,8 +159,25 @@ The spectral premise needs a **long, multi-cycle span** to baseline (real BGL is
   unchanged. (Templates reference: **Loghub-2.0**, 320 annotated BGL templates —
   https://github.com/logpai/loghub-2.0 — not the older 2k sample.)
 
-A tiny real `data/samples/BGL_2k.log` is committed for Stage-1 parsing/routing
-tests.
+- **OpenStack (the cadence-bearing corpus).** BGL turned out to be **flat** — it
+  has long span but almost no clean operational tones (it's bursty HPC RAS
+  logging; see `docs/stage0_findings.md`). **OpenStack** is the corpus where the
+  spectral premise actually holds: its `nova.compute.resource_tracker` periodic
+  task surfaces as a clean ~60s tone, and 22/33 templates are periodic at a
+  5–10s bin width. Download and run:
+
+  ```
+  https://zenodo.org/records/8196385/files/OpenStack.tar.gz
+  # untar; then:
+  logsig survey --openstack data/OpenStack --bin-widths 5 10
+  logsig run    --openstack data/OpenStack --rank
+  ```
+
+  OpenStack uses the actual log **level** as the router (no alert tag): ERROR/
+  CRITICAL → trivial path, else spectral.
+
+Tiny real samples (`data/samples/BGL_2k.log`, `data/samples/OpenStack_2k.log`)
+are committed for Stage-1 parsing/routing tests.
 
 > **Do NOT score against the datasets' native anomaly labels (§7.1).** They mark
 > the novel-template / error anomalies this project *concedes*. We use the
